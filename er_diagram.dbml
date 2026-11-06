@@ -1,0 +1,123 @@
+// ER-модель ДЗ2: прогноз запізнення доставки
+
+Table hw2_zones {
+  zone_id integer [pk]
+  zone_name varchar(60) [not null]
+  city varchar(60) [not null]
+  base_eta_min integer [not null]
+  is_active boolean [not null]
+
+  indexes {
+    (city, zone_name) [unique]
+  }
+}
+
+Table hw2_restaurants {
+  restaurant_id bigint [pk]
+  zone_id integer [not null]
+  restaurant_name text [not null]
+  cuisine text [not null]
+  partner_since date [not null]
+}
+
+Table hw2_couriers {
+  courier_id bigint [pk]
+  home_zone_id integer [not null]
+  courier_code varchar(12) [not null, unique]
+  vehicle_type text [not null]
+  hired_on date [not null]
+  is_active boolean [not null]
+}
+
+Table hw2_courier_zones {
+  courier_id bigint
+  zone_id integer
+  certified_on date [not null]
+  priority integer [not null]
+
+  indexes {
+    (courier_id, zone_id) [pk]
+  }
+}
+
+Table hw2_orders {
+  order_id bigint [pk]
+  restaurant_id bigint [not null]
+  dropoff_zone_id integer [not null]
+  courier_id bigint
+  created_at timestamptz [not null]
+  promised_at timestamptz [not null]
+  delivered_at timestamptz
+  distance_km numeric(6,2) [not null]
+  order_value numeric(10,2) [not null]
+
+  indexes {
+    (order_id, courier_id) [unique]
+  }
+}
+
+Table hw2_courier_features_offline {
+  courier_id bigint
+  deliveries_30d integer [not null]
+  on_time_rate_30d numeric(5,4)
+  avg_delivery_min_30d numeric(6,2)
+  reliability_tier text
+  valid_from timestamptz
+  valid_to timestamptz
+
+  indexes {
+    (courier_id, valid_from) [pk]
+  }
+
+  Note: 'Версія чинна на [valid_from, valid_to), valid_to = NULL означає поточну версію'
+}
+
+Table hw2_training_events {
+  event_id bigint [pk]
+  order_id bigint [not null, unique]
+  courier_id bigint [not null]
+  prediction_ts timestamptz [not null]
+  label_horizon_end timestamptz [not null]
+  is_late boolean [not null]
+}
+
+Table hw2_courier_features_online {
+  courier_id bigint [pk]
+  home_zone_name varchar(60) [not null]
+  vehicle_type text [not null]
+  deliveries_30d integer [not null]
+  on_time_rate_30d numeric(5,4)
+  avg_delivery_min_30d numeric(6,2)
+  reliability_tier text
+  feature_ts timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Ref: hw2_restaurants.zone_id > hw2_zones.zone_id // child 0..N : parent 1..1
+Ref: hw2_couriers.home_zone_id > hw2_zones.zone_id // child 0..N : parent 1..1
+Ref: hw2_courier_zones.courier_id > hw2_couriers.courier_id // child 0..N : parent 1..1
+Ref: hw2_courier_zones.zone_id > hw2_zones.zone_id // child 0..N : parent 1..1
+Ref: hw2_orders.restaurant_id > hw2_restaurants.restaurant_id // child 0..N : parent 1..1
+Ref: hw2_orders.dropoff_zone_id > hw2_zones.zone_id // child 0..N : parent 1..1
+Ref: hw2_orders.courier_id > hw2_couriers.courier_id // child 0..N : parent 0..1
+Ref: hw2_courier_features_offline.courier_id > hw2_couriers.courier_id // child 0..N : parent 1..1
+Ref: hw2_training_events.courier_id > hw2_couriers.courier_id // child 0..N : parent 1..1
+Ref: hw2_training_events.(order_id, courier_id) - hw2_orders.(order_id, courier_id) // child 0..1 : parent 1..1
+Ref: hw2_courier_features_online.courier_id - hw2_couriers.courier_id // child 0..1 : parent 1..1
+
+TableGroup business {
+  hw2_zones
+  hw2_restaurants
+  hw2_couriers
+  hw2_courier_zones
+  hw2_orders
+}
+
+TableGroup offline {
+  hw2_courier_features_offline
+  hw2_training_events
+}
+
+TableGroup online {
+  hw2_courier_features_online
+}
